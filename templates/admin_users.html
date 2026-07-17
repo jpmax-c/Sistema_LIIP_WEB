@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Listado de Cuentas - CONCEPTS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header-section">
+        <h2 style="color: #1e3d59; margin: 0;">Listado de Cuentas Registradas</h2>
+        <a href="{{ url_for('admin_menu') }}" class="btn btn-secondary">🔙 Volver al Menú</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre Completo</th>
+                    <th>ID Estudiantil</th>
+                    <th>Usuario</th>
+                    <th>Teléfono</th>
+                    <th>Correo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for usr in usuarios %}
+                <tr>
+                    <td>{{ usr[1] }}</td>
+                    <td>{{ usr[2] }}</td>
+                    <td>{{ usr[3] }}</td>
+                    <td>{{ usr[4] }}</td>
+                    <td>{{ usr[5] }}</td>
+                    <td>
+                        <form action="{{ url_for('delete_user', username_to_delete=usr[3]) }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Está seguro de eliminar permanentemente la cuenta de {{ usr[1] }}?')">
+                            <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑️ Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

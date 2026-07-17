@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Máquinas - CONCEPTS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .control-bar { background: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; }
+        .actions-panel { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; background-color: white; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
+    </style>
+</head>
+<body>
+    <div class="header-section">
+        <h2 style="color: #1e3d59; margin: 0;">Registro de Uso de Equipos - LIIP</h2>
+        <a href="{{ url_for('admin_menu') }}" class="btn btn-secondary">🔙 Volver al Menú</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="control-bar">
+        <form method="GET" action="{{ url_for('admin_machines') }}" style="display: flex; gap: 10px; align-items: center; margin: 0; width: 100%;">
+            <label>Filtrar por Equipo:</label>
+            <select name="filtro" onchange="this.form.submit()" style="min-width: 250px;">
+                {% for f in filtros %}
+                    <option value="{{ f }}" {% if filtro_actual == f %}selected{% endif %}>{{ f }}</option>
+                {% endfor %}
+            </select>
+            <a href="{{ url_for('admin_machines', filtro=filtro_actual) }}" class="btn btn-secondary" style="margin-left: auto;">🔄 Sincronizar Datos</a>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Usuario</th>
+                    <th>Carrera / Área</th>
+                    <th>Máquina</th>
+                    <th>Tema</th>
+                    <th>Inicio</th>
+                    <th>Fin</th>
+                    <th>Estado</th>
+                    <th>Observación Encargado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for act in actividades %}
+                <tr id="row-{{ act[0] }}" onclick="selectRow('{{ act[0] }}')" style="cursor: pointer;">
+                    <td>{{ act[0] }}</td>
+                    <td>{{ act[1] }}</td>
+                    <td>{{ act[2] }}</td>
+                    <td>{{ act[3] }}</td>
+                    <td>{{ act[4] }}</td>
+                    <td>{{ act[5] }}</td>
+                    <td>{{ act[6] }}</td>
+                    <td style="font-weight: bold;">{{ act[7] }}</td>
+                    <td>{{ act[8] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Formulario para Modificación del Registro Seleccionado -->
+    <form id="status-form" method="POST" action="{{ url_for('change_status') }}">
+        <input type="hidden" name="filtro_actual" value="{{ filtro_actual }}">
+        <input type="hidden" id="selected-act-id" name="act_id" required>
+        
+        <div class="actions-panel">
+            <span id="select-warning" style="color: #bb2d3b; font-weight: bold; width: 100%; display: block; margin-bottom: 5px;">⚠️ Seleccione una fila de la tabla para cambiar su estado</span>
+            
+            <input type="text" id="admin-comment" name="comentario_admin" placeholder="Agregar observación o comentario a la actividad seleccionada..." style="flex-grow: 1;" disabled>
+            
+            <button type="submit" name="nuevo_estado" value="Aprobada" id="btn-approve" class="btn btn-success" disabled>✅ Aprobar</button>
+            <button type="submit" name="nuevo_estado" value="Rechazada" id="btn-reject" class="btn btn-danger" disabled>❌ Rechazar</button>
+        </div>
+    </form>
+
+    <div class="actions-panel" style="justify-content: space-between; margin-top: 15px;">
+        <div>
+            <a href="{{ url_for('export_data', format_type='xlsx', filtro=filtro_actual) }}" class="btn" style="background-color: #0f5132; font-weight: bold;">📊 Exportar Reporte (.xlsx)</a>
+            <a href="{{ url_for('export_data', format_type='csv', filtro=filtro_actual) }}" class="btn" style="background-color: #313131; font-weight: bold;">📄 Exportar Log (.csv)</a>
+        </div>
+        <form action="{{ url_for('clear_history') }}" method="POST" onsubmit="return confirm('¿Está absolutamente seguro de limpiar todo el historial de uso de las máquinas?\nEsta acción no se puede deshacer.')" style="margin: 0;">
+            <button type="submit" class="btn btn-danger" style="font-weight: bold;">🗑️ Limpiar Historial de Usos</button>
+        </form>
+    </div>
+
+    <script>
+        // Script interactivo para emular la selección de filas física de QTableWidget
+        function selectRow(id) {
+            // Desmarcar todas las filas
+            document.querySelectorAll('tr').forEach(tr => tr.style.backgroundColor = '');
+            
+            // Marcar fila seleccionada
+            const row = document.getElementById('row-' + id);
+            row.style.backgroundColor = '#e2f0d9';
+            
+            // Activar inputs
+            document.getElementById('selected-act-id').value = id;
+            document.getElementById('admin-comment').disabled = false;
+            document.getElementById('btn-approve').disabled = false;
+            document.getElementById('btn-reject').disabled = false;
+            document.getElementById('select-warning').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

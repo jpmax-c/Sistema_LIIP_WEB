@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel de Control Maestro - CONCEPTS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .menu-container { max-width: 500px; margin: 80px auto; text-align: center; display: flex; flex-direction: column; gap: 20px; }
+        .menu-btn { padding: 18px; font-size: 16px; border-radius: 8px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <h1 style="color: #1e3d59; margin-bottom: 10px;">Panel de Control Maestro - CONCEPTS</h1>
+        <a href="{{ url_for('admin_users') }}" class="btn menu-btn" style="background-color: #0d6efd;">👥 Ver Usuarios Registrados</a>
+        <a href="{{ url_for('admin_machines') }}" class="btn menu-btn" style="background-color: #198754;">⚙️ Acceder al Registro de Uso de Máquinas</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger menu-btn">🚪 Cerrar Sesión</a>
+    </div>
+</body>
+</html>

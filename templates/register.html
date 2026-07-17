@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro - CONCEPTS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .register-container {
+            max-width: 450px; margin: 40px auto; background: white;
+            padding: 30px; border-radius: 8px; border: 1px solid #dee2e6;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 15px; }
+        .form-group label { margin-bottom: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <h2 style="color: #0d6efd; margin-top: 0;">Formulario de Registro</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="form-group"><input type="text" name="nombre" placeholder="Nombre Completo" required></div>
+            <div class="form-group"><input type="text" name="cedula" placeholder="ID Estudiantil" required></div>
+            <div class="form-group"><input type="text" name="carrera" placeholder="Carrera / Departamento" required></div>
+            <div class="form-group"><input type="text" name="telefono" placeholder="Teléfono de Contacto" required></div>
+            <div class="form-group"><input type="email" name="correo" placeholder="Correo Institucional" required></div>
+            <div class="form-group"><input type="text" name="username" placeholder="Nombre de Usuario (Login)" required></div>
+            <div class="form-group"><input type="password" name="password" placeholder="Contraseña" required></div>
+            
+            <button type="submit" class="btn" style="width: 100%;">Crear Cuenta</button>
+        </form>
+        <p style="text-align: center; margin-top: 15px;">
+            <a href="{{ url_for('login') }}" style="color: #0d6efd; text-decoration: none; font-weight: bold;">Volver a Inicio de Sesión</a>
+        </p>
+    </div>
+</body>
+</html>

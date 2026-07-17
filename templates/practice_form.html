@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if actividad %}Editar Práctica{% else %}Registrar Nueva Práctica{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .form-container { max-width: 500px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 15px; }
+        .form-group label { font-weight: bold; margin-bottom: 6px; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>{% if actividad %}Editar Práctica{% else %}Registrar Nueva Práctica{% endif %}</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label>Seleccionar Máquina:</label>
+                <select name="maquina">
+                    {% for maq in maquinas %}
+                        <option value="{{ maq }}" {% if actividad and actividad[1] == maq %}selected{% endif %}>{{ maq }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nº de Usuarios (Personas):</label>
+                <select name="personas">
+                    {% for i in range(1, 31) %}
+                        <option value="{{ i }}" {% if actividad and actividad[2] == i %}selected{% endif %}>{{ i }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tema / Ensayo:</label>
+                <input type="text" name="tema" value="{% if actividad %}{{ actividad[3] }}{% endif %}" placeholder="Ej. Prototipo de engranes" required>
+            </div>
+            <div class="form-group">
+                <label>Observaciones:</label>
+                <textarea name="observaciones" rows="4" placeholder="Agrega notas u observaciones relevantes...">{% if actividad %}{{ actividad[4] }}{% endif %}</textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn" style="flex: 1;">{% if actividad %}Guardar Cambios{% else %}Iniciar Actividad ⏱️{% endif %}</button>
+                <a href="{{ url_for('user_panel') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

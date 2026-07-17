@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel Operativo - CONCEPTS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #dee2e6; padding-bottom: 15px; margin-bottom: 20px; }
+        .card { background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .card-info b { color: #2c3e50; }
+        .card-actions { display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2 style="margin: 0;">Panel Operativo de: <span style="color: #0d6efd;">{{ username }}</span></h2>
+        <a href="{{ url_for('logout') }}" class="btn btn-secondary">Cerrar Sesión</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div style="margin-bottom: 25px;">
+        <a href="{{ url_for('practice_form') }}" class="btn" style="padding: 12px 24px; font-size: 16px;">➕ Registrar Nueva Práctica</a>
+    </div>
+
+    <h3>🚀 Tus Prácticas / Actividades en Ejecución:</h3>
+    <div class="active-list">
+        {% if actividades %}
+            {% for act in actividades %}
+            <div class="card">
+                <div class="card-info">
+                    <p style="margin: 4px 0;"><b>Máquina:</b> {{ act[1] }}</p>
+                    <p style="margin: 4px 0;"><b>Tema:</b> {{ act[2] }}</p>
+                    <p style="margin: 4px 0;"><b>Inicio:</b> {{ act[3] }} | <b>Usuarios:</b> {{ act[4] }}</p>
+                </div>
+                <div class="card-actions">
+                    <a href="{{ url_for('practice_form', actividad_id=act[0]) }}" class="btn" style="background-color: #ffc107; color: black;">Editar</a>
+                    <a href="{{ url_for('finish_practice', actividad_id=act[0]) }}" class="btn btn-danger" onclick="return confirm('¿Seguro que desea finalizar esta práctica?')">Finalizar Actividad</a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else: %}
+            <p style="color: #6c757d; font-style: italic;">No tienes actividades activas registradas en este momento.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

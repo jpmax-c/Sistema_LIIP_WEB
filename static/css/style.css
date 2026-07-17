@@ -1,0 +1,113 @@
+/* --- Estilos Generales basados en STYLE_SHEET de PyQt6 --- */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+    color: #212529;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+h1, h2, h3, label {
+    font-weight: 500;
+}
+
+/* Campos de Texto */
+input[type="text"], input[type="password"], input[type="email"], select, textarea {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #ffffff;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border 0.15s ease-in-out;
+}
+
+input:focus, select:focus, textarea:focus {
+    border: 2px solid #0d6efd;
+}
+
+/* Botones */
+.btn {
+    background-color: #0d6efd;
+    color: white;
+    font-weight: bold;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-block;
+    text-align: center;
+    font-size: 14px;
+}
+
+.btn:hover {
+    background-color: #0b5ed7;
+}
+
+.btn-danger {
+    background-color: #dc3545 !important;
+}
+.btn-danger:hover {
+    background-color: #bb2d3b !important;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+}
+.btn-secondary:hover {
+    background-color: #5c636a;
+}
+
+.btn-success {
+    background-color: #198754;
+}
+.btn-success:hover {
+    background-color: #157347;
+}
+
+/* Tablas Responsivas */
+.table-container {
+    overflow-x: auto;
+    margin: 20px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+th {
+    background-color: #e9ecef;
+    padding: 10px;
+    font-weight: bold;
+    text-align: left;
+    border-bottom: 2px solid #dee2e6;
+}
+
+td {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+tr:hover {
+    background-color: #f1f3f5;
+}
+
+/* Alertas de Notificación */
+.alert {
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+.alert-success { background-color: #d1e7dd; color: #0f5132; }
+.alert-warning { background-color: #fff3cd; color: #664d03; }
+.alert-danger { background-color: #f8d7da; color: #842029; }
