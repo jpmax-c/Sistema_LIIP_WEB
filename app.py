@@ -3,6 +3,7 @@ from database import get_connection, hash_password, initialize_database
 from datetime import datetime
 import pandas as pd
 import io
+import random
 
 app = Flask(__name__)
 app.secret_key = "CONCEPTS_SECRET_KEY_PROTOTIPADO" # Cambia por una clave segura en producción
@@ -33,8 +34,12 @@ def login():
             role = result[0]
             session['username'] = username
             session['role'] = role
+            
+            # Redirección según el rol correspondiente[cite: 4]
             if role == 'admin':
                 return redirect(url_for('admin_menu'))
+            elif role == 'tecnico':
+                return redirect(url_for('tecnico_panel'))
             else:
                 return redirect(url_for('user_panel'))
         else:
@@ -70,6 +75,7 @@ def register():
         conn = get_connection()
         cursor = conn.cursor()
         try:
+            # Por defecto se registran como estudiantes ('user')[cite: 4]
             cursor.execute("""
                 INSERT INTO usuarios (username, password, nombre_completo, cedula_id, carrera_departamento, telefono, correo, role) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
@@ -87,7 +93,7 @@ def register():
 
 
 # ----------------------------------------------------
-# 3. ÁREA DE USUARIO (UserWindow)
+# 3. ÁREA DE USUARIO / ESTUDIANTE (UserWindow)
 # ----------------------------------------------------
 @app.route('/user_panel')
 def user_panel():
@@ -97,19 +103,71 @@ def user_panel():
     username = session['username']
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # Prácticas en ejecución en máquinas físicas[cite: 4]
     cursor.execute("""
         SELECT id, maquina, tema, fecha_inicio, num_personas 
         FROM actividades 
         WHERE usuario = ? AND estado = 'En ejecución'
     """, (username,))
     actividades = cursor.fetchall()
+    
+    # Historial de solicitudes enviadas al laboratorio para revisión del Técnico
+    cursor.execute("""
+        SELECT id, codigo_solicitud, nombre_proyecto, tipo_servicio, material_solicitado, estado, fecha_ingreso
+        FROM solicitudes 
+        WHERE usuario = ? 
+        ORDER BY id DESC
+    """, (username,))
+    solicitudes = cursor.fetchall()
+    
     conn.close()
     
-    return render_template('user_panel.html', username=username, actividades=actividades)
+    return render_template('user_panel.html', username=username, actividades=actividades, solicitudes=solicitudes)
 
 
 # ----------------------------------------------------
-# 4. FORMULARIO DE PRÁCTICAS (PracticeFormWindow)
+# 4. FORMULARIO DE SOLICITUDES / ACTIVIDADES (Para el Técnico)
+# ----------------------------------------------------
+@app.route('/solicitudes/nueva', methods=['GET', 'POST'])
+def nueva_solicitud():
+    if 'username' not in session or session.get('role') != 'user':
+        return redirect(url_for('login'))
+        
+    if request.method == 'POST':
+        usuario = session['username']
+        nombre_proyecto = request.form.get('nombre_proyecto', '').strip()
+        archivo_ruta = request.form.get('archivo_ruta', '').strip()
+        tipo_servicio = request.form.get('tipo_servicio')
+        material_solicitado = request.form.get('material_solicitado', '').strip()
+        cantidad = int(request.form.get('cantidad', 1))
+        prioridad = request.form.get('prioridad', 'Normal')
+        fecha_ingreso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Generación de código único
+        codigo_solicitud = f"REQ-{datetime.now().year}-{random.randint(1000, 9999)}"
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO solicitudes (codigo_solicitud, usuario, nombre_proyecto, archivo_ruta, tipo_servicio, material_solicitado, cantidad, prioridad, fecha_ingreso)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (codigo_solicitud, usuario, nombre_proyecto, archivo_ruta, tipo_servicio, material_solicitado, cantidad, prioridad, fecha_ingreso))
+            conn.commit()
+            flash("¡Actividad registrada y enviada al Técnico de laboratorio!", "success")
+        except Exception as e:
+            flash(f"Error al registrar: {str(e)}", "danger")
+        finally:
+            conn.close()
+            
+        return redirect(url_for('user_panel'))
+
+    return render_template('nueva_solicitud.html')
+
+
+# ----------------------------------------------------
+# 5. FORMULARIO DE PRÁCTICAS (PracticeFormWindow)
 # ----------------------------------------------------
 @app.route('/practice/new', methods=['GET', 'POST'])
 @app.route('/practice/edit/<int:actividad_id>', methods=['GET', 'POST'])
@@ -126,7 +184,6 @@ def practice_form(actividad_id=None):
         "Impresora 3D Resina Anycubic"
     ]
     
-    # Cargar datos si es modo edición
     actividad = None
     if actividad_id:
         conn = get_connection()
@@ -149,7 +206,6 @@ def practice_form(actividad_id=None):
         cursor = conn.cursor()
 
         if actividad_id is None:
-            # Insertar nueva actividad
             fecha_inicio = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute("""
                 INSERT INTO actividades (usuario, maquina, num_personas, tema, observaciones, fecha_inicio)
@@ -157,7 +213,6 @@ def practice_form(actividad_id=None):
             """, (username, maquina, personas, tema, observaciones, fecha_inicio))
             flash("¡Práctica iniciada con éxito!", "success")
         else:
-            # Guardar edición
             cursor.execute("""
                 UPDATE actividades 
                 SET maquina = ?, num_personas = ?, tema = ?, observaciones = ? 
@@ -193,7 +248,54 @@ def finish_practice(actividad_id):
 
 
 # ----------------------------------------------------
-# 5. ÁREA DE ADMINISTRACIÓN (AdminWindow)
+# 6. ÁREA DE TÉCNICO DE LABORATORIO
+# ----------------------------------------------------
+@app.route('/tecnico_panel')
+def tecnico_panel():
+    if 'username' not in session or session.get('role') != 'tecnico':
+        return redirect(url_for('login'))
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Muestra todas las actividades de los alumnos
+    cursor.execute("""
+        SELECT s.id, s.codigo_solicitud, u.nombre_completo, s.nombre_proyecto, 
+               s.tipo_servicio, s.material_solicitado, s.estado, s.fecha_ingreso
+        FROM solicitudes s
+        INNER JOIN usuarios u ON s.usuario = u.username
+        ORDER BY s.id DESC
+    """)
+    solicitudes = cursor.fetchall()
+    conn.close()
+    
+    return render_template('tecnico_panel.html', solicitudes=solicitudes)
+
+
+@app.route('/tecnico/actualizar_estado', methods=['POST'])
+def tecnico_actualizar_estado():
+    if 'username' not in session or session.get('role') != 'tecnico':
+        return redirect(url_for('login'))
+        
+    solicitud_id = request.form.get('solicitud_id')
+    nuevo_estado = request.form.get('nuevo_estado')
+    comentario = request.form.get('comentario_personal', '').strip()
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE solicitudes 
+        SET estado = ?, comentario_personal = ? 
+        WHERE id = ?
+    """, (nuevo_estado, comentario, solicitud_id))
+    conn.commit()
+    conn.close()
+    
+    flash(f"Actividad #{solicitud_id} actualizada correctamente.", "success")
+    return redirect(url_for('tecnico_panel'))
+
+
+# ----------------------------------------------------
+# 7. ÁREA DE ADMINISTRACIÓN (AdminWindow)
 # ----------------------------------------------------
 @app.route('/admin')
 def admin_menu():
@@ -202,7 +304,6 @@ def admin_menu():
     return render_template('admin_menu.html')
 
 
-# PANTALLA 2: Control de Cuentas de Usuarios
 @app.route('/admin/users')
 def admin_users():
     if 'username' not in session or session.get('role') != 'admin':
@@ -235,7 +336,6 @@ def delete_user(username_to_delete):
     return redirect(url_for('admin_users'))
 
 
-# PANTALLA 3: Registro de Uso de Máquinas
 @app.route('/admin/machines', methods=['GET', 'POST'])
 def admin_machines():
     if 'username' not in session or session.get('role') != 'admin':
@@ -307,10 +407,12 @@ def clear_history():
     return redirect(url_for('admin_machines'))
 
 
-# EXPORTACIÓN DE REPORTES (Excel/CSV de pandas)
+# ----------------------------------------------------
+# 8. EXPORTACIÓN E IMPORTACIÓN A EXCEL
+# ----------------------------------------------------
 @app.route('/admin/export/<format_type>')
 def export_data(format_type):
-    if 'username' not in session or session.get('role') != 'admin':
+    if 'username' not in session or session.get('role') not in ['admin', 'tecnico']:
         return redirect(url_for('login'))
 
     filtro = request.args.get('filtro', 'Todas las Máquinas')
@@ -338,7 +440,6 @@ def export_data(format_type):
     filename = f"Reporte_{filtro.replace(' ', '_')}"
 
     if format_type == "xlsx":
-        # Exportación de Pandas a Memoria (Sin guardar localmente en el servidor)
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name="Registros")
         output.seek(0)
@@ -348,13 +449,70 @@ def export_data(format_type):
             headers={"Content-Disposition": f"attachment;filename={filename}.xlsx"}
         )
     else:
-        # Exportación CSV UTF-8 con soporte para tildes (BOM)
         csv_data = df.to_csv(index=False, encoding='utf-8-sig')
         return Response(
             csv_data,
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment;filename={filename}.csv"}
         )
+
+
+@app.route('/admin/importar/usuarios', methods=['POST'])
+def importar_usuarios_excel():
+    if 'username' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    file = request.files.get('archivo_excel')
+    if not file or file.filename == '':
+        flash("No seleccionó ningún archivo.", "warning")
+        return redirect(url_for('admin_users'))
+
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        flash("Formato inválido. Debe subir un archivo Excel (.xlsx).", "danger")
+        return redirect(url_for('admin_users'))
+
+    try:
+        df = pd.read_excel(file)
+        columnas_requeridas = ['username', 'password', 'nombre_completo', 'cedula_id', 'carrera_departamento', 'telefono', 'correo', 'role']
+        if not all(col in df.columns for col in columnas_requeridas):
+            flash("El Excel no cuenta con la estructura o cabeceras requeridas.", "danger")
+            return redirect(url_for('admin_users'))
+
+        # Detectar el marcador dinámico de base de datos
+        from database import DATABASE_URL
+        conn = get_connection()
+        cursor = conn.cursor()
+        param_style = "%s" if DATABASE_URL else "?"
+        
+        usuarios_creados = 0
+        for _, row in df.iterrows():
+            pass_encriptada = hash_password(str(row['password']))
+            try:
+                cursor.execute(f"""
+                    INSERT INTO usuarios (username, password, nombre_completo, cedula_id, carrera_departamento, telefono, correo, role)
+                    VALUES ({param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style})
+                """, (
+                    str(row['username']).strip(),
+                    pass_encriptada,
+                    str(row['nombre_completo']).strip(),
+                    str(row['cedula_id']).strip(),
+                    str(row['carrera_departamento']).strip(),
+                    str(row['telefono']).strip(),
+                    str(row['correo']).strip(),
+                    str(row['role']).strip().lower()
+                ))
+                usuarios_creados += 1
+            except Exception:
+                continue # Salta duplicados de llave única
+                
+        conn.commit()
+        conn.close()
+        flash(f"Carga finalizada. Se registraron {usuarios_creados} usuarios desde el Excel.", "success")
+        
+    except Exception as e:
+        flash(f"Error procesando el documento: {str(e)}", "danger")
+
+    return redirect(url_for('admin_users'))
 
 
 if __name__ == '__main__':

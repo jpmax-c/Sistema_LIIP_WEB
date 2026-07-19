@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrar Nueva Actividad</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+    <div class="container mt-5" style="max-width: 600px;">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Formulario de Requerimiento / Actividad</h4>
+            </div>
+            <div class="card-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form action="/solicitudes/nueva" method="POST">
+                    <div class="mb-3">
+                        <label for="nombre_proyecto" class="form-label">Nombre del Proyecto / Ensayo</label>
+                        <input type="text" class="form-row form-control" id="nombre_proyecto" name="nombre_proyecto" placeholder="Ej. Prototipo Nubi v2" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tipo_servicio" class="form-label">Tipo de Servicio</label>
+                        <select class="form-select" id="tipo_servicio" name="tipo_servicio" required>
+                            <option value="" disabled selected>Selecciona una opción...</option>
+                            <option value="Impresión 3D FDM">Impresión 3D FDM</option>
+                            <option value="Impresión 3D Resina">Impresión 3D Resina</option>
+                            <option value="Cortadora Láser">Cortadora Láser</option>
+                            <option value="Mecanizado CNC">Mecanizado CNC</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="material_solicitado" class="form-label">Material a Utilizar</label>
+                        <input type="text" class="form-control" id="material_solicitado" name="material_solicitado" placeholder="Ej. PLA Blanco, Resina Transparente, Acrílico 3mm" required>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="cantidad" class="form-label">Cantidad de Piezas</label>
+                            <input type="number" class="form-control" id="cantidad" name="cantidad" value="1" min="1" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="prioridad" class="form-label">Prioridad</label>
+                            <select class="form-select" id="prioridad" name="prioridad">
+                                <option value="Baja">Baja</option>
+                                <option value="Normal" selected>Normal</option>
+                                <option value="Alta">Alta (Sujeto a revisión)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="archivo_ruta" class="form-label">Enlace o Nombre del Archivo de Diseño (.STL / .DXF)</label>
+                        <input type="text" class="form-control" id="archivo_ruta" name="archivo_ruta" placeholder="Ej. /disenos/pieza_base.stl o link de Drive" required>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="/user_panel" class="btn btn-secondary">Cancelar y Volver</a>
+                        <button type="submit" class="btn btn-success">Enviar al Técnico</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

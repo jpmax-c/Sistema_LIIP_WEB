@@ -51,3 +51,41 @@
     </div>
 </body>
 </html>
+
+<!-- Sección de Solicitudes para el Técnico -->
+<div class="card my-4 shadow-sm">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Mis Actividades / Solicitudes de Laboratorio</h5>
+        <a href="/solicitudes/nueva" class="btn btn-light btn-sm">Registrar Nueva Actividad</a>
+    </div>
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Proyecto</th>
+                    <th>Servicio</th>
+                    <th>Material</th>
+                    <th>Fecha Envió</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sol in solicitudes %}
+                <tr>
+                    <td><strong>{{ sol[1] }}</strong></td>
+                    <td>{{ sol[2] }}</td>
+                    <td><span class="badge bg-secondary">{{ sol[3] }}</span></td>
+                    <td>{{ sol[4] }}</td>
+                    <td>{{ sol[6] }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ sol[5] }}</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No has registrado actividades dirigidas al técnico aún.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
