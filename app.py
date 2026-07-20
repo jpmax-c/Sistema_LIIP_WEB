@@ -1,43 +1,21 @@
-import os
+from flask import Flask, render_template, request, redirect, url_for, flash, session, Response
+from database import get_connection, hash_password, initialize_database
+from datetime import datetime
+import pandas as pd
 import io
 import random
 import smtplib
-from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-import pandas as pd
-from flask import (
-    Flask, render_template, request, redirect, 
-    url_for, flash, session, Response, send_from_directory, abort
-)
-from werkzeug.utils import secure_filename
-
-# Importaciones de tu módulo de base de datos
-from database import get_connection, hash_password, initialize_database
-
-# Detectar si estamos en producción (PostgreSQL) o local (SQLite)
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "CONCEPTS_SECRET_KEY_PROTOTIPADO")
-
-# Configuración de uploads y formatos permitidos
-UPLOAD_FOLDER = os.path.join('static', 'uploads')
-ALLOWED_EXTENSIONS = {'stl', 'dxf', 'pdf', 'zip'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+app.secret_key = "CONCEPTS_SECRET_KEY_PROTOTIPADO" # Cambia por una clave segura en producción
 
 # Inicializar Base de Datos en el arranque
 initialize_database()
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 # ----------------------------------------------------
-# 1. AUTENTICACIÓN
+# 1. AUTENTICACIÓN (LoginWindow)
 # ----------------------------------------------------
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -51,8 +29,7 @@ def login():
 
         conn = get_connection()
         cursor = conn.cursor()
-        param_style = "%s" if DATABASE_URL else "?"
-        cursor.execute(f"SELECT role FROM usuarios WHERE username = {param_style} AND password = {param_style}", (username, hash_password(password)))
+        cursor.execute("SELECT role FROM usuarios WHERE username = ? AND password = ?", (username, hash_password(password)))
         result = cursor.fetchone()
         conn.close()
 
@@ -61,6 +38,7 @@ def login():
             session['username'] = username
             session['role'] = role
             
+            # Redirección según el rol correspondiente[cite: 4]
             if role == 'admin':
                 return redirect(url_for('admin_menu'))
             elif role == 'tecnico':
@@ -78,8 +56,9 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+
 # ----------------------------------------------------
-# 2. REGISTRO DE USUARIOS
+# 2. REGISTRO DE USUARIOS (RegisterWindow)
 # ----------------------------------------------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -98,11 +77,11 @@ def register():
 
         conn = get_connection()
         cursor = conn.cursor()
-        param_style = "%s" if DATABASE_URL else "?"
         try:
-            cursor.execute(f"""
+            # Por defecto se registran como estudiantes ('user')[cite: 4]
+            cursor.execute("""
                 INSERT INTO usuarios (username, password, nombre_completo, cedula_id, carrera_departamento, telefono, correo, role) 
-                VALUES ({param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, 'user')
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
             """, (username, hash_password(password), nombre, cedula, carrera, telefono, correo))
             conn.commit()
             flash("Cuenta registrada con éxito. Ya puedes iniciar sesión.", "success")
@@ -115,8 +94,9 @@ def register():
 
     return render_template('register.html')
 
+
 # ----------------------------------------------------
-# 3. ÁREA DE USUARIO / ESTUDIANTE
+# 3. ÁREA DE USUARIO / ESTUDIANTE (UserWindow)
 # ----------------------------------------------------
 @app.route('/user_panel')
 def user_panel():
@@ -126,19 +106,20 @@ def user_panel():
     username = session['username']
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
     
-    cursor.execute(f"""
+    # Prácticas en ejecución en máquinas físicas[cite: 4]
+    cursor.execute("""
         SELECT id, maquina, tema, fecha_inicio, num_personas 
         FROM actividades 
-        WHERE usuario = {param_style} AND estado = 'En ejecución'
+        WHERE usuario = ? AND estado = 'En ejecución'
     """, (username,))
     actividades = cursor.fetchall()
     
-    cursor.execute(f"""
+    # Historial de solicitudes enviadas al laboratorio para revisión del Técnico
+    cursor.execute("""
         SELECT id, codigo_solicitud, nombre_proyecto, tipo_servicio, material_solicitado, estado, fecha_ingreso
         FROM solicitudes 
-        WHERE usuario = {param_style} 
+        WHERE usuario = ? 
         ORDER BY id DESC
     """, (username,))
     solicitudes = cursor.fetchall()
@@ -147,41 +128,37 @@ def user_panel():
     
     return render_template('user_panel.html', username=username, actividades=actividades, solicitudes=solicitudes)
 
+
 # ----------------------------------------------------
-# 4. REGISTRO DE SOLICITUDES Y DESCARGAS
+# 4. FORMULARIO DE SOLICITUDES / ACTIVIDADES (Para el Técnico)
 # ----------------------------------------------------
 @app.route('/solicitudes/nueva', methods=['GET', 'POST'])
 def nueva_solicitud():
-    if 'username' not in session:
+    if 'username' not in session or session.get('role') != 'user':
         return redirect(url_for('login'))
         
     if request.method == 'POST':
         usuario = session['username']
         nombre_proyecto = request.form.get('nombre_proyecto', '').strip()
+        archivo_ruta = request.form.get('archivo_ruta', '').strip()
         tipo_servicio = request.form.get('tipo_servicio')
         material_solicitado = request.form.get('material_solicitado', '').strip()
         cantidad = int(request.form.get('cantidad', 1))
         prioridad = request.form.get('prioridad', 'Normal')
         fecha_ingreso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        file = request.files.get('archivo')
-        filename = None
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
+        # Generación de código único
         codigo_solicitud = f"REQ-{datetime.now().year}-{random.randint(1000, 9999)}"
 
         conn = get_connection()
         cursor = conn.cursor()
-        param_style = "%s" if DATABASE_URL else "?"
         try:
-            cursor.execute(f"""
+            cursor.execute("""
                 INSERT INTO solicitudes (codigo_solicitud, usuario, nombre_proyecto, archivo_ruta, tipo_servicio, material_solicitado, cantidad, prioridad, fecha_ingreso)
-                VALUES ({param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style})
-            """, (codigo_solicitud, usuario, nombre_proyecto, filename, tipo_servicio, material_solicitado, cantidad, prioridad, fecha_ingreso))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (codigo_solicitud, usuario, nombre_proyecto, archivo_ruta, tipo_servicio, material_solicitado, cantidad, prioridad, fecha_ingreso))
             conn.commit()
-            flash("¡Solicitud registrada y enviada al Técnico de laboratorio!", "success")
+            flash("¡Actividad registrada y enviada al Técnico de laboratorio!", "success")
         except Exception as e:
             flash(f"Error al registrar: {str(e)}", "danger")
         finally:
@@ -191,15 +168,9 @@ def nueva_solicitud():
 
     return render_template('nueva_solicitud.html')
 
-@app.route('/uploads/<filename>')
-def download_file(filename):
-    try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
-    except FileNotFoundError:
-        abort(404)
 
 # ----------------------------------------------------
-# 5. PRÁCTICAS
+# 5. FORMULARIO DE PRÁCTICAS (PracticeFormWindow)
 # ----------------------------------------------------
 @app.route('/practice/new', methods=['GET', 'POST'])
 @app.route('/practice/edit/<int:actividad_id>', methods=['GET', 'POST'])
@@ -217,11 +188,10 @@ def practice_form(actividad_id=None):
     ]
     
     actividad = None
-    param_style = "%s" if DATABASE_URL else "?"
     if actividad_id:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(f"SELECT id, maquina, num_personas, tema, observaciones FROM actividades WHERE id = {param_style}", (actividad_id,))
+        cursor.execute("SELECT id, maquina, num_personas, tema, observaciones FROM actividades WHERE id = ?", (actividad_id,))
         actividad = cursor.fetchone()
         conn.close()
 
@@ -240,16 +210,16 @@ def practice_form(actividad_id=None):
 
         if actividad_id is None:
             fecha_inicio = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(f"""
+            cursor.execute("""
                 INSERT INTO actividades (usuario, maquina, num_personas, tema, observaciones, fecha_inicio)
-                VALUES ({param_style}, {param_style}, {param_style}, {param_style}, {param_style}, {param_style})
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (username, maquina, personas, tema, observaciones, fecha_inicio))
             flash("¡Práctica iniciada con éxito!", "success")
         else:
-            cursor.execute(f"""
+            cursor.execute("""
                 UPDATE actividades 
-                SET maquina = {param_style}, num_personas = {param_style}, tema = {param_style}, observaciones = {param_style} 
-                WHERE id = {param_style}
+                SET maquina = ?, num_personas = ?, tema = ?, observaciones = ? 
+                WHERE id = ?
             """, (maquina, personas, tema, observaciones, actividad_id))
             flash("Práctica modificada con éxito.", "success")
 
@@ -259,6 +229,7 @@ def practice_form(actividad_id=None):
 
     return render_template('practice_form.html', maquinas=maquinas, actividad=actividad)
 
+
 @app.route('/practice/finish/<int:actividad_id>')
 def finish_practice(actividad_id):
     if 'username' not in session:
@@ -267,17 +238,17 @@ def finish_practice(actividad_id):
     fecha_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
-    cursor.execute(f"""
+    cursor.execute("""
         UPDATE actividades 
-        SET fecha_fin = {param_style}, estado = 'Finalizada' 
-        WHERE id = {param_style}
+        SET fecha_fin = ?, estado = 'Finalizada' 
+        WHERE id = ?
     """, (fecha_fin, actividad_id))
     conn.commit()
     conn.close()
     
     flash("La práctica ha sido marcada como Finalizada con éxito.", "success")
     return redirect(url_for('user_panel'))
+
 
 # ----------------------------------------------------
 # 6. ÁREA DE TÉCNICO DE LABORATORIO
@@ -289,6 +260,7 @@ def tecnico_panel():
         
     conn = get_connection()
     cursor = conn.cursor()
+    # Muestra todas las actividades de los alumnos
     cursor.execute("""
         SELECT s.id, s.codigo_solicitud, u.nombre_completo, s.nombre_proyecto, 
                s.tipo_servicio, s.material_solicitado, s.estado, s.fecha_ingreso
@@ -301,6 +273,7 @@ def tecnico_panel():
     
     return render_template('tecnico_panel.html', solicitudes=solicitudes)
 
+
 @app.route('/tecnico/actualizar_estado', methods=['POST'])
 def tecnico_actualizar_estado():
     if 'username' not in session or session.get('role') != 'tecnico':
@@ -312,11 +285,10 @@ def tecnico_actualizar_estado():
     
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
-    cursor.execute(f"""
+    cursor.execute("""
         UPDATE solicitudes 
-        SET estado = {param_style}, comentario_personal = {param_style} 
-        WHERE id = {param_style}
+        SET estado = ?, comentario_personal = ? 
+        WHERE id = ?
     """, (nuevo_estado, comentario, solicitud_id))
     conn.commit()
     conn.close()
@@ -324,14 +296,16 @@ def tecnico_actualizar_estado():
     flash(f"Actividad #{solicitud_id} actualizada correctamente.", "success")
     return redirect(url_for('tecnico_panel'))
 
+
 # ----------------------------------------------------
-# 7. ÁREA DE ADMINISTRACIÓN
+# 7. ÁREA DE ADMINISTRACIÓN (AdminWindow)
 # ----------------------------------------------------
 @app.route('/admin')
 def admin_menu():
     if 'username' not in session or session.get('role') != 'admin':
         return redirect(url_for('login'))
     return render_template('admin_menu.html')
+
 
 @app.route('/admin/users')
 def admin_users():
@@ -345,6 +319,7 @@ def admin_users():
     conn.close()
     return render_template('admin_users.html', usuarios=usuarios)
 
+
 @app.route('/admin/users/delete/<username_to_delete>', methods=['POST'])
 def delete_user(username_to_delete):
     if 'username' not in session or session.get('role') != 'admin':
@@ -356,13 +331,13 @@ def delete_user(username_to_delete):
 
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
-    cursor.execute(f"DELETE FROM usuarios WHERE username = {param_style}", (username_to_delete,))
+    cursor.execute("DELETE FROM usuarios WHERE username = ?", (username_to_delete,))
     conn.commit()
     conn.close()
     
     flash(f"La cuenta de '{username_to_delete}' ha sido borrada con éxito.", "success")
     return redirect(url_for('admin_users'))
+
 
 @app.route('/admin/machines', methods=['GET', 'POST'])
 def admin_machines():
@@ -379,17 +354,17 @@ def admin_machines():
     ]
 
     filtro = request.args.get('filtro', 'Todas las Máquinas')
+
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
-
     query = """
         SELECT a.id, u.nombre_completo, u.carrera_departamento, a.maquina, a.tema, a.fecha_inicio, a.fecha_fin, a.estado, a.comentario_admin 
         FROM actividades a
         INNER JOIN usuarios u ON a.usuario = u.username
     """
     if filtro != "Todas las Máquinas":
-        query += f" WHERE a.maquina = {param_style} ORDER BY a.id DESC"
+        query += " WHERE a.maquina = ?"
+        query += " ORDER BY a.id DESC"
         cursor.execute(query, (filtro,))
     else:
         query += " ORDER BY a.id DESC"
@@ -399,6 +374,7 @@ def admin_machines():
     conn.close()
 
     return render_template('admin_machines.html', actividades=actividades, filtros=maquinas_filtro, filtro_actual=filtro)
+
 
 @app.route('/admin/machines/status', methods=['POST'])
 def change_status():
@@ -411,13 +387,13 @@ def change_status():
 
     conn = get_connection()
     cursor = conn.cursor()
-    param_style = "%s" if DATABASE_URL else "?"
-    cursor.execute(f"UPDATE actividades SET estado = {param_style}, comentario_admin = {param_style} WHERE id = {param_style}", (nuevo_estado, comentario, act_id))
+    cursor.execute("UPDATE actividades SET estado = ?, comentario_admin = ? WHERE id = ?", (nuevo_estado, comentario, act_id))
     conn.commit()
     conn.close()
 
     flash(f"Actividad #{act_id} marcada como '{nuevo_estado}' con éxito.", "success")
     return redirect(url_for('admin_machines', filtro=request.form.get('filtro_actual')))
+
 
 @app.route('/admin/machines/clear', methods=['POST'])
 def clear_history():
@@ -432,6 +408,7 @@ def clear_history():
 
     flash("Se ha vaciado todo el historial de usos correctamente.", "success")
     return redirect(url_for('admin_machines'))
+
 
 # ----------------------------------------------------
 # 8. EXPORTACIÓN E IMPORTACIÓN A EXCEL
@@ -482,6 +459,7 @@ def export_data(format_type):
             headers={"Content-Disposition": f"attachment;filename={filename}.csv"}
         )
 
+
 @app.route('/admin/importar/usuarios', methods=['POST'])
 def importar_usuarios_excel():
     if 'username' not in session or session.get('role') != 'admin':
@@ -503,6 +481,8 @@ def importar_usuarios_excel():
             flash("El Excel no cuenta con la estructura o cabeceras requeridas.", "danger")
             return redirect(url_for('admin_users'))
 
+        # Detectar el marcador dinámico de base de datos
+        from database import DATABASE_URL
         conn = get_connection()
         cursor = conn.cursor()
         param_style = "%s" if DATABASE_URL else "?"
@@ -526,7 +506,7 @@ def importar_usuarios_excel():
                 ))
                 usuarios_creados += 1
             except Exception:
-                continue
+                continue # Salta duplicados de llave única
                 
         conn.commit()
         conn.close()
@@ -537,13 +517,12 @@ def importar_usuarios_excel():
 
     return redirect(url_for('admin_users'))
 
-# ----------------------------------------------------
-# 9. RECUPERACIÓN DE CONTRASEÑA
-# ----------------------------------------------------
+
+# CONFIGURACIÓN SMTP (Reemplaza con tus credenciales reales o variables de entorno)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SMTP_USER = os.environ.get("SMTP_USER", "pjallauca@espe.edu.ec")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "lfbmtpkxgcnhchrd")
+SMTP_USER = "pjallauca@espe.edu.ec"  # Configura tu correo institucional o de laboratorio
+SMTP_PASSWORD = "ybueaikqihcltgra" # Contraseña de aplicación generada en tu cuenta de Google
 
 def enviar_correo_codigo(correo_destino, codigo):
     try:
@@ -556,9 +535,10 @@ def enviar_correo_codigo(correo_destino, codigo):
         <html>
         <body>
             <h2>Recuperación de Contraseña</h2>
-            <p>Has solicitado restablecer tu contraseña para el sistema del Laboratorio CONCEPTS.</p>
+            <p>Has solicitado restablecer tu contraseña para el sistema del Laboratorio de Ingeniería Inversa y Prototipado CONCEPTS.</p>
             <p>Tu código de verificación temporal es:</p>
             <h1 style='color: #007bff;'>{codigo}</h1>
+            <p>Este código vencerá al cerrar la ventana de recuperación.</p>
         </body>
         </html>
         """
@@ -571,42 +551,38 @@ def enviar_correo_codigo(correo_destino, codigo):
         server.quit()
         return True
     except Exception as e:
-        print(f"Error enviando correo SMTP: {e}")
+        print(f"Error enviando correo: {e}")
         return False
 
+# RUTA: Solicitar Código
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            param_style = "%s" if DATABASE_URL else "?"
-            cursor.execute(f"SELECT correo FROM usuarios WHERE username = {param_style}", (username,))
-            result = cursor.fetchone()
-            conn.close()
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT correo FROM usuarios WHERE username = ?", (username,))
+        result = cursor.fetchone()
+        conn.close()
 
-            if result and result[0]:
-                correo = result[0]
-                codigo = str(random.randint(100000, 999999))
-                session['recovery_code'] = codigo
-                session['recovery_user'] = username
-                
-                if enviar_correo_codigo(correo, codigo):
-                    flash(f"Se ha enviado un código de verificación al correo asociado.", "info")
-                    return redirect(url_for('verify_code'))
-                else:
-                    flash("No se pudo enviar el correo de verificación. Revisa la contraseña de aplicación SMTP.", "danger")
+        if result and result[0]:
+            correo = result[0]
+            codigo = str(random.randint(100000, 999999))
+            session['recovery_code'] = codigo
+            session['recovery_user'] = username
+            
+            if enviar_correo_codigo(correo, codigo):
+                flash(f"Se ha enviado un código de verificación al correo asociado: {correo[:3]}***{correo[correo.find('@'):]}", "info")
+                return redirect(url_for('verify_code'))
             else:
-                flash("El usuario ingresado no existe o no cuenta con un correo registrado.", "warning")
-
-        except Exception as e:
-            print(f"Error en ruta forgot_password: {e}")
-            flash(f"Ocurrió un error en la base de datos o en el servidor: {str(e)}", "danger")
+                flash("Error al enviar el correo. Por favor, contacta al administrador.", "danger")
+        else:
+            flash("El usuario ingresado no existe o no cuenta con un correo registrado.", "warning")
 
     return render_template('forgot_password.html')
 
+# RUTA: Verificar Código
 @app.route('/verify_code', methods=['GET', 'POST'])
 def verify_code():
     if 'recovery_user' not in session or 'recovery_code' not in session:
@@ -623,6 +599,7 @@ def verify_code():
 
     return render_template('verify_code.html')
 
+# RUTA: Restablecer Contraseña
 @app.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
     if not session.get('code_verified'):
@@ -640,6 +617,8 @@ def reset_password():
         
         conn = get_connection()
         cursor = conn.cursor()
+        
+        from database import DATABASE_URL
         param_style = "%s" if DATABASE_URL else "?"
         
         cursor.execute(f"UPDATE usuarios SET password = {param_style} WHERE username = {param_style}", (hash_password(nueva_pass), username))
@@ -651,6 +630,7 @@ def reset_password():
         return redirect(url_for('login'))
 
     return render_template('reset_password.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
