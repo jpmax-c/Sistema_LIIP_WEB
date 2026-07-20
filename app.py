@@ -12,7 +12,12 @@ from flask import (
     url_for, flash, session, Response, send_from_directory, abort
 )
 from werkzeug.utils import secure_filename
-from database import get_connection, hash_password, initialize_database, DATABASE_URL
+
+# Importaciones de tu módulo de base de datos
+from database import get_connection, hash_password, initialize_database
+
+# Detectar si estamos en producción (PostgreSQL) o local (SQLite)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "CONCEPTS_SECRET_KEY_PROTOTIPADO")
@@ -566,7 +571,7 @@ def enviar_correo_codigo(correo_destino, codigo):
         server.quit()
         return True
     except Exception as e:
-        print(f"Error enviando correo: {e}")
+        print(f"Error enviando correo SMTP: {e}")
         return False
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
@@ -574,26 +579,31 @@ def forgot_password():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         
-        conn = get_connection()
-        cursor = conn.cursor()
-        param_style = "%s" if DATABASE_URL else "?"
-        cursor.execute(f"SELECT correo FROM usuarios WHERE username = {param_style}", (username,))
-        result = cursor.fetchone()
-        conn.close()
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            param_style = "%s" if DATABASE_URL else "?"
+            cursor.execute(f"SELECT correo FROM usuarios WHERE username = {param_style}", (username,))
+            result = cursor.fetchone()
+            conn.close()
 
-        if result and result[0]:
-            correo = result[0]
-            codigo = str(random.randint(100000, 999999))
-            session['recovery_code'] = codigo
-            session['recovery_user'] = username
-            
-            if enviar_correo_codigo(correo, codigo):
-                flash(f"Se ha enviado un código de verificación al correo asociado.", "info")
-                return redirect(url_for('verify_code'))
+            if result and result[0]:
+                correo = result[0]
+                codigo = str(random.randint(100000, 999999))
+                session['recovery_code'] = codigo
+                session['recovery_user'] = username
+                
+                if enviar_correo_codigo(correo, codigo):
+                    flash(f"Se ha enviado un código de verificación al correo asociado.", "info")
+                    return redirect(url_for('verify_code'))
+                else:
+                    flash("No se pudo enviar el correo de verificación. Revisa la contraseña de aplicación SMTP.", "danger")
             else:
-                flash("Error al enviar el correo. Contacta al administrador.", "danger")
-        else:
-            flash("El usuario ingresado no existe o no cuenta con correo.", "warning")
+                flash("El usuario ingresado no existe o no cuenta con un correo registrado.", "warning")
+
+        except Exception as e:
+            print(f"Error en ruta forgot_password: {e}")
+            flash(f"Ocurrió un error en la base de datos o en el servidor: {str(e)}", "danger")
 
     return render_template('forgot_password.html')
 
