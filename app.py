@@ -5,11 +5,24 @@ import pandas as pd
 import io
 import random
 import smtplib
+import psutil  # <--- AGREGAR AQUÍ
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 app.secret_key = "CONCEPTS_SECRET_KEY_PROTOTIPADO" # Cambia por una clave segura en producción
+# --- FUNCIÓN PARA MEDIR RAM ---
+def log_memoria():
+    try:
+        process = psutil.Process(os.getpid())
+        mem_mb = process.memory_info().rss / (1024 * 1024)
+        print(f"--> [USO DE RAM ACTUAL]: {mem_mb:.2f} MB / 512 MB", flush=True)
+    except Exception as e:
+        print(f"Error midiendo memoria: {e}")
+
+log_memoria()  # Mide la memoria apenas arranca el servidor
+
 
 # Inicializar Base de Datos en el arranque
 initialize_database()
