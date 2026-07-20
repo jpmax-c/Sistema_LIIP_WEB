@@ -7,7 +7,8 @@ import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
+import os
+from flask import send_from_directory, abort
 
 app = Flask(__name__)
 app.secret_key = "CONCEPTS_SECRET_KEY_PROTOTIPADO" # Cambia por una clave segura en producción
@@ -631,5 +632,17 @@ def reset_password():
 
     return render_template('reset_password.html')
 
+# Define la carpeta donde se guardan los archivos subidos (si no la tienes arriba)
+UPLOAD_FOLDER = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+@app.route('/uploads/<filename>')
+def download_file(filename):
+    try:
+        # Envía de forma segura el archivo desde el directorio de subidas al navegador
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    except FileNotFoundError:
+        abort(404)
+        
 if __name__ == '__main__':
     app.run(debug=True)
