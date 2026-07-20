@@ -4,6 +4,10 @@ from datetime import datetime
 import pandas as pd
 import io
 import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 app = Flask(__name__)
 app.secret_key = "CONCEPTS_SECRET_KEY_PROTOTIPADO" # Cambia por una clave segura en producción
@@ -514,6 +518,118 @@ def importar_usuarios_excel():
 
     return redirect(url_for('admin_users'))
 
+# CONFIGURACIÓN SMTP (Reemplaza con tus credenciales reales o variables de entorno)
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = "pjallauca@espe.edu.ec"  # Tu correo institucional completo
+SMTP_PASSWORD = "tavsboavbchhvqxt" # Las 16 letras que debes generar
+
+def enviar_correo_codigo(correo_destino, codigo):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = correo_destino
+        msg['Subject'] = "Código de Recuperación - Laboratorio CONCEPTS"
+
+        cuerpo = f"""
+        <html>
+        <body>
+            <h2>Recuperación de Contraseña</h2>
+            <p>Has solicitado restablecer tu contraseña para el sistema del Laboratorio de Ingeniería Inversa y Prototipado CONCEPTS.</p>
+            <p>Tu código de verificación temporal es:</p>
+            <h1 style='color: #007bff;'>{codigo}</h1>
+            <p>Este código vencerá al cerrar la ventana de recuperación.</p>
+        </body>
+        </html>
+        """
+        msg.attach(MIMEText(cuerpo, 'html'))
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_USER, correo_destino, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error enviando correo: {e}")
+        return False
+
+# RUTA: Solicitar Código
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT correo FROM usuarios WHERE username = ?", (username,))
+        result = cursor.fetchone()
+        conn.close()
+
+        if result and result[0]:
+            correo = result[0]
+            codigo = str(random.randint(100000, 999999))
+            session['recovery_code'] = codigo
+            session['recovery_user'] = username
+            
+            if enviar_correo_codigo(correo, codigo):
+                flash(f"Se ha enviado un código de verificación al correo asociado: {correo[:3]}***{correo[correo.find('@'):]}", "info")
+                return redirect(url_for('verify_code'))
+            else:
+                flash("Error al enviar el correo. Por favor, contacta al administrador.", "danger")
+        else:
+            flash("El usuario ingresado no existe o no cuenta con un correo registrado.", "warning")
+
+    return render_template('forgot_password.html')
+
+# RUTA: Verificar Código
+@app.route('/verify_code', methods=['GET', 'POST'])
+def verify_code():
+    if 'recovery_user' not in session or 'recovery_code' not in session:
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        codigo_ingresado = request.form.get('codigo', '').strip()
+
+        if codigo_ingresado == session.get('recovery_code'):
+            session['code_verified'] = True
+            return redirect(url_for('reset_password'))
+        else:
+            flash("El código de verificación es incorrecto.", "danger")
+
+    return render_template('verify_code.html')
+
+# RUTA: Restablecer Contraseña
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password():
+    if not session.get('code_verified'):
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        nueva_pass = request.form.get('password', '').strip()
+        confirm_pass = request.form.get('confirm_password', '').strip()
+
+        if nueva_pass != confirm_pass:
+            flash("Las contraseñas no coinciden.", "warning")
+            return redirect(url_for('reset_password'))
+
+        username = session.get('recovery_user')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        from database import DATABASE_URL
+        param_style = "%s" if DATABASE_URL else "?"
+        
+        cursor.execute(f"UPDATE usuarios SET password = {param_style} WHERE username = {param_style}", (hash_password(nueva_pass), username))
+        conn.commit()
+        conn.close()
+
+        session.clear()
+        flash("Contraseña actualizada con éxito. Ya puedes iniciar sesión.", "success")
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
